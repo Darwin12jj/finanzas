@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fondo completo sin bordes (requerido para maskable) -->
+  <rect width="512" height="512" fill="#2563EB"/>
+  <!-- Ícono centrado dentro del safe zone (80% central = 204px margen de 154px cada lado) -->
+  <text x="256" y="360"
+        font-family="'Arial Black', 'Arial Bold', Arial, sans-serif"
+        font-weight="900"
+        font-size="280"
+        text-anchor="middle"
+        fill="white">$</text>
+</svg>

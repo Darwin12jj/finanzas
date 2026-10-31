@@ -24,6 +24,11 @@
 
     .default-badge { font-size:10px; font-weight:700; background:var(--bg); color:var(--text3); padding:2px 6px; border-radius:var(--rf); text-transform:uppercase; letter-spacing:.5px; }
   </style>
+  <link rel="manifest" href="../manifest.json">
+  <meta name="theme-color" content="#2563EB">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FinanzApp">
+  <link rel="apple-touch-icon" href="../icons/icon.svg">
 </head>
 <body>
 <div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
@@ -214,5 +219,6 @@ requireAuth(async user => {
   loadCats();
 });
 </script>
+<script src="../js/pwa.js"></script>
 </body>
 </html>

@@ -1,0 +1,40 @@
+{
+  "name": "FinanzApp",
+  "short_name": "FinanzApp",
+  "description": "Control de finanzas personales",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F1F5F9",
+  "theme_color": "#2563EB",
+  "orientation": "portrait-primary",
+  "lang": "es",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Ingresos",
+      "url": "./pages/ingresos.html",
+      "description": "Registrar ingresos"
+    },
+    {
+      "name": "Egresos",
+      "url": "./pages/egresos.html",
+      "description": "Registrar gastos"
+    }
+  ]
+}

@@ -236,7 +236,7 @@ function renderBudgetList(bycat, presupuestos) {
 }
 
 async function renderHistoryChart() {
-  const months = getLast6Months(curMonth);
+  const months = getLast6Months(getCurrentMonth());
   const labels = months.map(m => formatMonth(m).split(' ')[0]);
   const data   = await Promise.all(months.map(m => getResumenMes(curUser.uid,m)));
   const canvas = document.getElementById('history-chart');

@@ -22,10 +22,11 @@
           <p class="page-subtitle" id="page-subtitle">Resumen del mes</p>
         </div>
       </div>
-      <div class="month-selector">
-        <button class="month-btn" onclick="changeMonth(-1)" id="btn-prev"></button>
-        <span class="month-text" id="month-text">...</span>
-        <button class="month-btn" onclick="changeMonth(1)" id="btn-next"></button>
+      <!-- Period selector -->
+      <div class="tabs" id="period-tabs" style="margin-bottom:0;border:none;background:transparent;padding:0;gap:6px">
+        <div class="tab active" onclick="setPeriod('month')"  id="tab-month">Este mes</div>
+        <div class="tab"        onclick="setPeriod('last')"   id="tab-last">Mes pasado</div>
+        <div class="tab"        onclick="setPeriod('6m')"     id="tab-6m">Últimos 6 meses</div>
       </div>
     </div>
 
@@ -35,48 +36,66 @@
         <div><strong>¡Déficit este mes!</strong> Tus gastos superan tus ingresos.</div>
       </div>
 
-      <div class="summary-grid mb-6">
-        <div class="summary-card income">
-          <div class="summary-label">Total Ingresos</div>
-          <div class="summary-value green" id="total-ingresos">$0</div>
-          <div class="summary-sub" id="ingresos-count">0 fuentes</div>
-          <div class="summary-icon" id="icon-ingresos"></div>
+      <!-- Vista: mes específico -->
+      <div id="section-month">
+        <div class="summary-grid mb-6">
+          <div class="summary-card income">
+            <div class="summary-label">Total Ingresos</div>
+            <div class="summary-value green" id="total-ingresos">$0</div>
+            <div class="summary-sub" id="ingresos-count">0 fuentes</div>
+            <div class="summary-icon" id="icon-ingresos"></div>
+          </div>
+          <div class="summary-card expense">
+            <div class="summary-label">Total Egresos</div>
+            <div class="summary-value red" id="total-egresos">$0</div>
+            <div class="summary-sub" id="egresos-count">0 gastos</div>
+            <div class="summary-icon" id="icon-egresos"></div>
+          </div>
+          <div class="summary-card balance" id="balance-card">
+            <div class="summary-label">Saldo Libre</div>
+            <div class="summary-value" id="saldo-libre">$0</div>
+            <div class="summary-sub" id="saldo-pct">—</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;display:none" id="metas-hint"></div>
+            <div class="summary-icon" id="icon-saldo"></div>
+          </div>
         </div>
-        <div class="summary-card expense">
-          <div class="summary-label">Total Egresos</div>
-          <div class="summary-value red" id="total-egresos">$0</div>
-          <div class="summary-sub" id="egresos-count">0 gastos</div>
-          <div class="summary-icon" id="icon-egresos"></div>
-        </div>
-        <div class="summary-card balance" id="balance-card">
-          <div class="summary-label">Saldo Libre</div>
-          <div class="summary-value" id="saldo-libre">$0</div>
-          <div class="summary-sub" id="saldo-pct">—</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px" id="metas-hint" style="display:none"></div>
-          <div class="summary-icon" id="icon-saldo"></div>
+
+        <div class="grid-2 mb-6">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Gastos por Categoría</span></div>
+            <div class="chart-wrap" style="height:220px" id="expense-chart-wrap"><canvas id="expense-chart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Estado Presupuesto</span>
+              <a href="pages/presupuesto.html" class="btn btn-ghost btn-sm" id="ver-presup"></a>
+            </div>
+            <div id="budget-list"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
         </div>
       </div>
 
-      <div class="grid-2 mb-6">
-        <div class="card">
-          <div class="card-header"><span class="card-title">Gastos por Categoría</span></div>
-          <div class="chart-wrap" style="height:220px" id="expense-chart-wrap"><canvas id="expense-chart"></canvas></div>
-        </div>
+      <!-- Vista: últimos 6 meses -->
+      <div id="section-history" style="display:none">
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Estado Presupuesto</span>
-            <a href="pages/presupuesto.html" class="btn btn-ghost btn-sm" id="ver-presup"></a>
+            <span class="card-title">Últimos 6 Meses</span>
+            <a href="pages/historico.html" class="btn btn-ghost btn-sm" id="ver-hist"></a>
           </div>
-          <div id="budget-list"><div class="loading"><div class="spinner"></div></div></div>
+          <div class="chart-wrap" style="height:340px"><canvas id="history-chart"></canvas></div>
         </div>
-      </div>
 
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Últimos 6 Meses</span>
-          <a href="pages/historico.html" class="btn btn-ghost btn-sm" id="ver-hist"></a>
+        <div class="card" style="margin-top:20px">
+          <div class="card-header"><span class="card-title">Resumen por Mes</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mes</th><th class="text-right">Ingresos</th><th class="text-right">Egresos</th><th class="text-right">Saldo</th></tr>
+              </thead>
+              <tbody id="tabla-hist"></tbody>
+            </table>
+          </div>
         </div>
-        <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
       </div>
     </div>
   </main>
@@ -94,37 +113,53 @@
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
 <script>
-let curMonth = getSelectedMonth();
-let curUser  = null;
-let chartExp = null;
-let chartHist= null;
+let curMonth  = getSelectedMonth();
+let curUser   = null;
+let chartExp  = null;
+let chartHist = null;
+let curPeriod = 'month'; // 'month' | 'last' | '6m'
 
-function updateMonthUI() {
-  document.getElementById('month-text').textContent    = formatMonth(curMonth);
-  document.getElementById('page-subtitle').textContent = 'Resumen de ' + formatMonth(curMonth);
+function getDisplayMonth() {
+  return curPeriod === 'last' ? prevMonth(getCurrentMonth()) : getCurrentMonth();
 }
 
-function changeMonth(dir) {
-  curMonth = dir < 0 ? prevMonth(curMonth) : nextMonth(curMonth);
-  setSelectedMonth(curMonth);
-  updateMonthUI();
-  loadDashboard();
+function setPeriod(period) {
+  curPeriod = period;
+  ['month','last','6m'].forEach(p => {
+    document.getElementById('tab-'+p).classList.toggle('active', p === period);
+  });
+
+  const isMonthView = period !== '6m';
+  document.getElementById('section-month').style.display   = isMonthView ? '' : 'none';
+  document.getElementById('section-history').style.display = isMonthView ? 'none' : '';
+  document.getElementById('deficit-alert').style.display   = 'none';
+
+  const mes = getDisplayMonth();
+  const labels = { month: 'Este mes — ' + formatMonth(mes), last: 'Mes pasado — ' + formatMonth(mes), '6m': 'Últimos 6 meses' };
+  document.getElementById('page-subtitle').textContent = labels[period];
+
+  if (isMonthView) loadMonthView(mes);
+  else             loadHistoryView();
 }
 
-async function loadDashboard() {
+async function loadMonthView(mes) {
   try {
     const [resumen, presupuestos, metas] = await Promise.all([
-      getResumenMes(curUser.uid, curMonth),
+      getResumenMes(curUser.uid, mes),
       getPresupuestos(curUser.uid),
       getMetas(curUser.uid)
     ]);
-    const totalMetas = metas.reduce((s, m) => s + (m.actual || 0), 0);
+    const totalMetas = metas.reduce((s,m) => s + (m.actual||0), 0);
     renderCards(resumen, totalMetas);
     renderExpenseChart(resumen.egresosPorCategoria);
     renderBudgetList(resumen.egresosPorCategoria, presupuestos);
-    await renderHistoryChart();
     document.getElementById('deficit-alert').style.display = resumen.saldoLibre < 0 ? 'flex' : 'none';
   } catch(e) { console.error(e); showToast('Error al cargar datos','error'); }
+}
+
+async function loadHistoryView() {
+  await renderHistoryChart();
+  await renderHistoryTable();
 }
 
 function renderCards(r, totalMetas) {
@@ -225,8 +260,6 @@ requireAuth(async user => {
   curUser = user;
   renderNav('index');
   document.getElementById('menu-toggle').innerHTML    = SVG.menu;
-  document.getElementById('btn-prev').innerHTML       = SVG.chevLeft;
-  document.getElementById('btn-next').innerHTML       = SVG.chevRight;
   document.getElementById('icon-ingresos').innerHTML  = SVG.wallet;
   document.getElementById('icon-egresos').innerHTML   = SVG.creditCard;
   document.getElementById('icon-saldo').innerHTML     = SVG.dollar;
@@ -237,8 +270,7 @@ requireAuth(async user => {
   document.getElementById('app-loading').style.display = 'none';
   document.getElementById('app').style.display         = 'flex';
   await initCategorias(curUser.uid);
-  updateMonthUI();
-  loadDashboard();
+  setPeriod('month');
 });
 </script>
 </body>

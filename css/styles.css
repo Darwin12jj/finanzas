@@ -378,3 +378,126 @@ html.dark .summary-card     { background: var(--card); }
 .profile-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
 .profile-name   { font-size: 16px; font-weight: 700; }
 .profile-email  { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+/* ===== RESPONSIVE OVERRIDES ========================================== */
+
+/* ── Tablet (≤ 1024px) ─────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .grid-2       { grid-template-columns: 1fr; }
+}
+
+/* ── Mobile (≤ 768px) ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Page header: apila título y controles */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .page-header > div:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* Month selector ocupa todo el ancho disponible */
+  .month-selector { flex: 1; justify-content: center; }
+  .month-text     { flex: 1; min-width: 0; font-size: 13px; }
+
+  /* Botones en header full width solo si están solos */
+  .page-header .btn { flex: 1; justify-content: center; min-width: 0; }
+
+  /* Todos los grids a una columna */
+  .summary-grid,
+  .grid-2,
+  .grid-3,
+  .form-row,
+  .form-row-3,
+  .budget-grid,
+  .goals-grid { grid-template-columns: 1fr !important; }
+
+  /* Cuerpo de página */
+  .page-body { padding: 12px 14px; }
+
+  /* Ocultar ícono decorativo de tarjetas para ahorrar espacio */
+  .summary-icon { display: none; }
+
+  /* Gráficas más bajas en móvil */
+  .chart-wrap         { height: 200px !important; }
+  .chart-wrap[style*="height:300px"] { height: 220px !important; }
+
+  /* Modal desliza desde abajo en móvil */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    border-radius: var(--rl) var(--rl) 0 0;
+    max-width: 100%;
+    max-height: 92vh;
+  }
+
+  /* Tabs con scroll horizontal */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex-shrink: 0; }
+
+  /* Settings: filas apiladas */
+  .settings-row   { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .settings-section { padding: 16px; }
+  .settings-section > div:last-child { width: 100%; }
+
+  /* Select y input de corte full width en móvil */
+  #select-corte   { width: 100% !important; }
+  #export-mes     { width: 100% !important; }
+  .settings-row > div:last-child { width: 100%; }
+  .settings-row > div:last-child .btn  { flex: 1; justify-content: center; }
+  .settings-row > div:last-child select,
+  .settings-row > div:last-child input { flex: 1; }
+
+  /* Icon picker 4 columnas en móvil */
+  .icon-picker    { grid-template-columns: repeat(4, 1fr); }
+
+  /* Tarjetas de categoría en ajustes */
+  .cat-grid       { grid-template-columns: 1fr !important; }
+
+  /* Cat-cards de egresos */
+  #cat-cards { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Perfil en ajustes */
+  .profile-card   { gap: 12px; }
+  .profile-avatar { width: 44px; height: 44px; }
+
+  /* Tabla: texto más pequeño */
+  table   { font-size: 13px; }
+  th, td  { padding: 9px 10px; }
+
+  /* Ocultar columna descripción en tablas pequeñas */
+  .td-desc { display: none; }
+
+  /* Goals grid */
+  .goals-grid { grid-template-columns: 1fr; }
+
+  /* Resumen en ingresos: 2 cols */
+  .summary-grid[style*="repeat(2"] { grid-template-columns: 1fr 1fr !important; }
+}
+
+/* ── Pantallas muy pequeñas (≤ 400px) ─────────────────────────────── */
+@media (max-width: 400px) {
+  .page-title  { font-size: 17px; }
+  .summary-value { font-size: 18px; }
+  .month-text  { font-size: 12px; min-width: 110px; }
+  #cat-cards   { grid-template-columns: 1fr !important; }
+  .icon-picker { grid-template-columns: repeat(3, 1fr); }
+  .icon-opt    { padding: 6px 2px; font-size: 9px; }
+  .sidebar-nav-item { padding: 9px 10px; font-size: 13px; }
+  .mobile-nav-item  { font-size: 9px; }
+  .mobile-nav-item .icon svg { width: 20px; height: 20px; }
+}

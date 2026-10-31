@@ -49,12 +49,21 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Nombre / Fuente</th><th>Fecha</th><th class="text-right">Valor</th><th></th></tr>
+            <tr><th>Estado</th><th>Nombre / Fuente</th><th>Fecha</th><th class="text-right">Valor</th><th></th></tr>
           </thead>
           <tbody id="tabla-ingresos">
-            <tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr>
+            <tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>
           </tbody>
           <tfoot>
+            <tr style="background:var(--bg)">
+              <td colspan="3" style="font-weight:700;padding:12px 14px">
+                TOTAL ACTIVO
+                <span id="inactive-hint" style="display:none;font-size:11px;font-weight:400;color:var(--danger);margin-left:8px"></span>
+              </td>
+              <td class="text-right td-amt green" id="total-footer" style="padding:12px 14px">$0</td>
+              <td></td>
+            </tr>
+          </tfoot>
             <tr style="background:var(--bg)">
               <td colspan="2" style="font-weight:700;padding:12px 14px">TOTAL</td>
               <td class="text-right td-amt green" id="total-footer" style="padding:12px 14px">$0</td>

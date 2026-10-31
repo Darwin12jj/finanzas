@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Metas</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle">Seguimiento de objetivos financieros</p>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-new" onclick="openModal('modal-meta');resetMetaForm()"></button>
+    </div>
+
+    <div class="page-body">
+      <div class="goals-grid" id="goals-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<!-- Modal nueva meta -->
+<div class="modal-overlay" id="modal-meta">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nueva Meta de Ahorro</span>
+      <button class="modal-close" onclick="closeModal('modal-meta')" id="close-meta"></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre de la meta</label>
+        <input class="form-input" id="m-nombre" placeholder="Ej: Viaje, Carro, Emergencias...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Objetivo ($)</label>
+          <input class="form-input" id="m-objetivo" type="number" min="1" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <input class="form-input" id="m-color" type="color" value="#2563EB" style="height:40px;padding:4px">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha límite (opcional)</label>
+        <input class="form-input" id="m-fecha" type="month">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-meta')">Cancelar</button>
+      <button class="btn btn-primary" onclick="crearMeta()" id="btn-crear"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal aporte -->
+<div class="modal-overlay" id="modal-aporte">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Agregar Aporte</span>
+      <button class="modal-close" onclick="closeModal('modal-aporte')" id="close-aporte"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="a-meta-id">
+      <div class="form-group">
+        <label class="form-label">Monto ($)</label>
+        <input class="form-input" id="a-monto" type="number" min="1" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción (opcional)</label>
+        <input class="form-input" id="a-desc" placeholder="Notas...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-aporte')">Cancelar</button>
+      <button class="btn btn-success" onclick="guardarAporte()" id="btn-abonar"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curUser=null;
+
+async function loadMetas() {
+  const metas=await getMetas(curUser.uid);
+  const grid=document.getElementById('goals-grid');
+  if (!metas.length) {
+    grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-state-icon" id="empty-icon"></div>
+      <div class="empty-state-title">Sin metas creadas</div>
+      <div class="empty-state-sub">Crea tu primera meta de ahorro</div></div>`;
+    document.getElementById('empty-icon').innerHTML=SVG.target;
+    return;
+  }
+  grid.innerHTML=metas.map(m=>{
+    const pct=m.objetivo>0?Math.min(Math.round((m.actual||0)/m.objetivo*100),100):0;
+    const color=m.color||'#2563EB';
+    const fechaStr=m.fechaLimite?' · Límite: '+m.fechaLimite:'';
+    return `
+    <div class="goal-card">
+      <div class="goal-top" style="background:${color}"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="goal-name">${m.nombre}${pct>=100?' ✓':''}</div>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="borrarMeta('${m.id}')" title="Eliminar">${SVG.trash}</button>
+      </div>
+      <div class="goal-current" style="color:${color}">${formatCOP(m.actual||0)}</div>
+      <div class="goal-target">de ${formatCOP(m.objetivo)}${fechaStr}</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">${pct}% completado</div>
+      <div class="goal-actions">
+        <button class="btn btn-outline btn-sm goal-aporte-btn" onclick="abrirAporte('${m.id}')"></button>
+        ${(m.aportes||[]).length?`<span style="font-size:12px;color:var(--text3);align-self:center">${m.aportes.length} aporte${m.aportes.length!==1?'s':''}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  // Add SVG to aporte buttons
+  document.querySelectorAll('.goal-aporte-btn').forEach(btn=>{
+    btn.innerHTML=SVG.plus+' Abonar';
+  });
+}
+
+function resetMetaForm() {
+  document.getElementById('m-nombre').value=''; document.getElementById('m-objetivo').value='';
+  document.getElementById('m-color').value='#2563EB'; document.getElementById('m-fecha').value='';
+}
+
+async function crearMeta() {
+  const nombre=document.getElementById('m-nombre').value.trim();
+  const objetivo=parseFloat(document.getElementById('m-objetivo').value);
+  const color=document.getElementById('m-color').value;
+  const fecha=document.getElementById('m-fecha').value;
+  if (!nombre||!objetivo) { showToast('Completa nombre y objetivo','warning'); return; }
+  try { await addMeta(curUser.uid,{nombre,objetivo,color,fechaLimite:fecha||null}); showToast('Meta creada'); closeModal('modal-meta'); loadMetas(); }
+  catch(e) { showToast('Error al crear','error'); }
+}
+
+function abrirAporte(metaId) {
+  document.getElementById('a-meta-id').value=metaId;
+  document.getElementById('a-monto').value=''; document.getElementById('a-desc').value='';
+  openModal('modal-aporte');
+}
+
+async function guardarAporte() {
+  const metaId=document.getElementById('a-meta-id').value;
+  const monto=parseFloat(document.getElementById('a-monto').value);
+  const desc=document.getElementById('a-desc').value.trim();
+  if (!monto||monto<=0) { showToast('Ingresa un monto válido','warning'); return; }
+  try { await addAporte(curUser.uid,metaId,monto,desc); showToast('Aporte registrado'); closeModal('modal-aporte'); loadMetas(); }
+  catch(e) { showToast('Error al abonar','error'); }
+}
+
+async function borrarMeta(id) {
+  if (!confirm('¿Eliminar esta meta?')) return;
+  try { await deleteMeta(curUser.uid,id); showToast('Meta eliminada'); loadMetas(); }
+  catch(e) { showToast('Error al eliminar','error'); }
+}
+
+requireAuth(user=>{
+  curUser=user;
+  renderNav('metas');
+  document.getElementById('menu-toggle').innerHTML   = SVG.menu;
+  document.getElementById('btn-new').innerHTML       = SVG.plus + ' Nueva meta';
+  document.getElementById('btn-crear').innerHTML     = SVG.target + ' Crear Meta';
+  document.getElementById('btn-abonar').innerHTML    = SVG.plus + ' Abonar';
+  document.getElementById('close-meta').innerHTML    = SVG.x;
+  document.getElementById('close-aporte').innerHTML  = SVG.x;
+  document.getElementById('page-title-el').innerHTML = SVG.target + ' Metas de Ahorro';
+  document.getElementById('app-loading').style.display='none';
+  document.getElementById('app').style.display='flex';
+  loadMetas();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Egresos</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle" id="page-subtitle">—</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="month-selector">
+          <button class="month-btn" onclick="changeMonth(-1)" id="btn-prev"></button>
+          <span class="month-text" id="month-text">...</span>
+          <button class="month-btn" onclick="changeMonth(1)" id="btn-next"></button>
+        </div>
+        <button class="btn btn-danger" id="btn-new" onclick="openModal('modal-egreso');resetForm()"></button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div id="cat-cards" class="mb-6" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
+      <div class="tabs" id="tabs"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Nombre</th><th>Categoría</th><th>Fecha</th><th class="text-right">Valor</th><th></th></tr>
+          </thead>
+          <tbody id="tabla-egresos">
+            <tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--bg)">
+              <td colspan="3" style="font-weight:700;padding:12px 14px">TOTAL</td>
+              <td class="text-right td-amt red" id="total-footer" style="padding:12px 14px">$0</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-egreso">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nuevo Gasto</span>
+      <button class="modal-close" onclick="closeModal('modal-egreso')" id="modal-close-btn"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" id="f-nombre" placeholder="Ej: Mercado, Gasolina...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <select class="form-input form-select" id="f-cat">
+            <option value="casa">Casa</option>
+            <option value="moto">Moto</option>
+            <option value="esposa">Esposa</option>
+            <option value="personal">Personal</option>
+            <option value="deudas">Deudas</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor ($)</label>
+          <input class="form-input" id="f-valor" type="number" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha</label>
+        <input class="form-input" id="f-fecha" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción (opcional)</label>
+        <input class="form-input" id="f-desc" placeholder="Notas...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-egreso')">Cancelar</button>
+      <button class="btn btn-danger" onclick="guardarEgreso()" id="btn-guardar"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curMonth  = getSelectedMonth();
+let curUser   = null;
+let activeTab = 'todos';
+let _all      = [];
+
+function updateMonthUI() {
+  document.getElementById('month-text').textContent    = formatMonth(curMonth);
+  document.getElementById('page-subtitle').textContent = formatMonth(curMonth);
+}
+
+function changeMonth(dir) {
+  curMonth = dir<0?prevMonth(curMonth):nextMonth(curMonth);
+  setSelectedMonth(curMonth); updateMonthUI(); loadEgresos();
+}
+
+function renderTabs() {
+  const tabs = [{ key:'todos', label:'Todos' }, ...getActiveCats().map(c=>({ key:c.id, label:c.nombre }))];
+  document.getElementById('tabs').innerHTML = tabs.map(t =>
+    `<div class="tab${t.key===activeTab?' active':''}" onclick="switchTab('${t.key}')">${t.key!=='todos'?getCategoryIcon(t.key,14)+' ':''}${t.label}</div>`
+  ).join('');
+}
+
+function switchTab(key) { activeTab=key; renderTabs(); renderTable(); }
+
+async function loadEgresos() {
+  _all = await getEgresos(curUser.uid, curMonth);
+  renderCatCards(); renderTabs(); renderTable();
+}
+
+function renderCatCards() {
+  const bycat={};
+  getActiveCats().forEach(c=>bycat[c.id]=0);
+  _all.forEach(e=>{
+    if(!bycat.hasOwnProperty(e.categoria)) bycat[e.categoria]=0;
+    bycat[e.categoria]+=(e.valor||0);
+  });
+  const total=Object.values(bycat).reduce((a,b)=>a+b,0);
+  document.getElementById('cat-cards').innerHTML = [
+    `<div class="summary-card expense" style="padding:14px"><div class="summary-label">Total Egresos</div><div class="summary-value red" style="font-size:18px">${formatCOP(total)}</div></div>`,
+    ...getActiveCats().map(c=>`
+    <div class="card" style="padding:14px;border-top:3px solid ${c.color};cursor:pointer" onclick="switchTab('${c.id}')">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:5px">${getCategoryIcon(c.id,14)} ${c.nombre}</div>
+      <div style="font-size:16px;font-weight:700;color:${c.color}">${formatCOP(bycat[c.id]||0)}</div>
+    </div>`)
+  ].join('');
+}
+
+function renderTable() {
+  const items = activeTab==='todos' ? _all : _all.filter(e=>e.categoria===activeTab);
+  const total = items.reduce((s,i)=>s+(i.valor||0),0);
+  document.getElementById('total-footer').textContent = formatCOP(total);
+  const tbody = document.getElementById('tabla-egresos');
+  if (!items.length) {
+    tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><div class="empty-state-title">Sin gastos en esta categoría</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(e=>`
+    <tr>
+      <td><strong>${e.nombre}</strong>${e.descripcion?'<br><span style="font-size:12px;color:var(--text3)">'+e.descripcion+'</span>':''}</td>
+      <td><span class="cat-badge" style="background:${hexToRgba(getCategoryColor(e.categoria),.12)};color:${getCategoryColor(e.categoria)}">${getCategoryIcon(e.categoria,12)} ${getCategoryName(e.categoria)}</span></td>
+      <td>${formatDate(e.fecha)}</td>
+      <td class="text-right td-amt red">${formatCOP(e.valor)}</td>
+      <td style="white-space:nowrap;display:flex;gap:4px">
+        <button class="btn btn-ghost btn-icon" onclick="editarEgreso('${e.id}')" title="Editar">${SVG.pencil}</button>
+        <button class="btn btn-ghost btn-icon" onclick="borrarEgreso('${e.id}')" title="Eliminar">${SVG.trash}</button>
+      </td>
+    </tr>`).join('');
+}
+
+function resetForm() {
+  document.getElementById('edit-id').value=''; document.getElementById('f-nombre').value='';
+  document.getElementById('f-valor').value='';  document.getElementById('f-fecha').value=todayStr();
+  document.getElementById('f-cat').value=activeTab!=='todos'?activeTab:'casa';
+  document.getElementById('f-desc').value='';
+  document.getElementById('modal-title').textContent='Nuevo Gasto';
+}
+
+function editarEgreso(id) {
+  const item=_all.find(i=>i.id===id); if(!item) return;
+  document.getElementById('edit-id').value=id; document.getElementById('f-nombre').value=item.nombre;
+  document.getElementById('f-valor').value=item.valor; document.getElementById('f-fecha').value=item.fecha;
+  document.getElementById('f-cat').value=item.categoria; document.getElementById('f-desc').value=item.descripcion||'';
+  document.getElementById('modal-title').textContent='Editar Gasto';
+  openModal('modal-egreso');
+}
+
+async function guardarEgreso() {
+  const nombre=document.getElementById('f-nombre').value.trim(), valor=parseFloat(document.getElementById('f-valor').value);
+  const fecha=document.getElementById('f-fecha').value, categoria=document.getElementById('f-cat').value;
+  const desc=document.getElementById('f-desc').value.trim();
+  if (!nombre||!valor||!fecha) { showToast('Completa los campos requeridos','warning'); return; }
+  const id=document.getElementById('edit-id').value;
+  try {
+    if(id) { await updateEgreso(curUser.uid,curMonth,id,{nombre,valor,fecha,categoria,descripcion:desc}); showToast('Gasto actualizado'); }
+    else   { await addEgreso(curUser.uid,curMonth,{nombre,valor,fecha,categoria,descripcion:desc});        showToast('Gasto guardado'); }
+    closeModal('modal-egreso'); loadEgresos();
+  } catch(e) { showToast('Error al guardar','error'); }
+}
+
+async function borrarEgreso(id) {
+  if(!confirm('¿Eliminar este gasto?')) return;
+  try { await deleteEgreso(curUser.uid,curMonth,id); showToast('Gasto eliminado'); loadEgresos(); }
+  catch(e) { showToast('Error al eliminar','error'); }
+}
+
+requireAuth(async user => {
+  curUser = user;
+  renderNav('egresos');
+  document.getElementById('menu-toggle').innerHTML      = SVG.menu;
+  document.getElementById('btn-prev').innerHTML         = SVG.chevLeft;
+  document.getElementById('btn-next').innerHTML         = SVG.chevRight;
+  document.getElementById('btn-new').innerHTML          = SVG.plus + ' Nuevo gasto';
+  document.getElementById('btn-guardar').innerHTML      = SVG.save + ' Guardar';
+  document.getElementById('modal-close-btn').innerHTML  = SVG.x;
+  document.getElementById('page-title-el').innerHTML    = SVG.creditCard + ' Egresos';
+  document.getElementById('app-loading').style.display  = 'none';
+  document.getElementById('app').style.display          = 'flex';
+  await initCategorias(curUser.uid);
+  // Build category select dynamically
+  const sel = document.getElementById('f-cat');
+  sel.innerHTML = getActiveCats().map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  updateMonthUI(); loadEgresos();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Presupuesto</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle" id="page-subtitle">—</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="month-selector">
+          <button class="month-btn" onclick="changeMonth(-1)" id="btn-prev"></button>
+          <span class="month-text" id="month-text">...</span>
+          <button class="month-btn" onclick="changeMonth(1)" id="btn-next"></button>
+        </div>
+        <button class="btn btn-primary" onclick="guardarPresupuestos()" id="btn-save"></button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="alert alert-warning mb-4" id="alert-info">
+        <span id="alert-icon"></span>
+        <div>Los límites aplican para todos los meses. Edítalos y haz clic en <strong>Guardar límites</strong>.</div>
+      </div>
+      <div class="budget-grid" id="budget-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curMonth=getSelectedMonth(), curUser=null, _presup={}, _gastos={};
+
+function updateMonthUI() {
+  document.getElementById('month-text').textContent    = formatMonth(curMonth);
+  document.getElementById('page-subtitle').textContent = 'Comparativa '+formatMonth(curMonth);
+}
+
+function changeMonth(dir) {
+  curMonth=dir<0?prevMonth(curMonth):nextMonth(curMonth);
+  setSelectedMonth(curMonth); updateMonthUI(); loadPresupuesto();
+}
+
+async function loadPresupuesto() {
+  const [resumen, presupuestos]=await Promise.all([getResumenMes(curUser.uid,curMonth), getPresupuestos(curUser.uid)]);
+  _presup={...presupuestos}; _gastos=resumen.egresosPorCategoria;
+  renderCards();
+}
+
+function renderCards() {
+  document.getElementById('budget-grid').innerHTML = getActiveCats().map(cat => {
+    const gasto=_gastos[cat.id]||0, limite=_presup[cat.id]||0;
+    const pct=limite>0?Math.min(Math.round(gasto/limite*100),999):0;
+    const state=pct>=100?'danger':pct>=80?'warning':'safe';
+    const color=cat.color;
+    return `
+    <div class="budget-card" style="border-top:3px solid ${color}">
+      <div class="budget-name" style="color:${color}">${getCategoryIcon(cat.id,18)} ${cat.nombre}</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:4px">
+        <span>Gastado</span><strong style="color:var(--text)">${formatCOP(gasto)}</strong>
+      </div>
+      <div class="progress-bar"><div class="progress-fill ${state}" style="width:${Math.min(pct,100)}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:14px">
+        <span>${pct}% del límite</span><span>${pct>=100?'Límite superado':''}</span>
+      </div>
+      <div class="budget-edit">
+        <label style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap">Límite $</label>
+        <input class="form-input" type="number" id="limit-${cat.id}" value="${limite}" min="0">
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function guardarPresupuestos() {
+  const nuevos={};
+  getActiveCats().forEach(cat=>{ nuevos[cat.id]=parseFloat(document.getElementById('limit-'+cat.id).value)||0; });
+  try { await savePresupuestos(curUser.uid,nuevos); _presup={...nuevos}; showToast('Presupuestos guardados'); renderCards(); }
+  catch(e) { showToast('Error al guardar','error'); }
+}
+
+requireAuth(async user => {
+  curUser=user;
+  renderNav('presupuesto');
+  document.getElementById('menu-toggle').innerHTML   = SVG.menu;
+  document.getElementById('btn-prev').innerHTML      = SVG.chevLeft;
+  document.getElementById('btn-next').innerHTML      = SVG.chevRight;
+  document.getElementById('btn-save').innerHTML      = SVG.save + ' Guardar límites';
+  document.getElementById('alert-icon').innerHTML    = SVG.alertTri;
+  document.getElementById('page-title-el').innerHTML = SVG.barChart + ' Presupuesto';
+  document.getElementById('app-loading').style.display='none';
+  document.getElementById('app').style.display='flex';
+  await initCategorias(curUser.uid);
+  updateMonthUI(); loadPresupuesto();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Categorías</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+    .cat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:18px; display:flex; align-items:center; gap:14px; }
+    .cat-card-icon { width:44px; height:44px; border-radius:var(--rs); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .cat-card-icon svg { width:22px; height:22px; }
+    .cat-card-info { flex:1; min-width:0; }
+    .cat-card-name { font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cat-card-id   { font-size:11px; color:var(--text3); margin-top:2px; }
+    .cat-card-actions { display:flex; gap:4px; flex-shrink:0; }
+
+    .icon-picker { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:4px; }
+    .icon-opt { display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; border-radius:var(--rs); cursor:pointer; border:2px solid transparent; font-size:10px; color:var(--text2); transition:all .15s; text-align:center; }
+    .icon-opt svg { width:22px; height:22px; }
+    .icon-opt:hover  { border-color:var(--border); background:var(--bg); }
+    .icon-opt.sel    { border-color:var(--primary); background:var(--primary-l); color:var(--primary); }
+
+    .default-badge { font-size:10px; font-weight:700; background:var(--bg); color:var(--text3); padding:2px 6px; border-radius:var(--rf); text-transform:uppercase; letter-spacing:.5px; }
+  </style>
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle">Personaliza tus categorías de gasto</p>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-new"></button>
+    </div>
+
+    <div class="page-body">
+      <div class="alert alert-warning mb-4" id="alert-info">
+        <span id="alert-icon"></span>
+        <div>Las categorías se usan en <strong>Egresos</strong> y <strong>Presupuesto</strong>. Si eliminas una con gastos registrados, esos gastos quedan sin categoría visible pero no se borran.</div>
+      </div>
+      <div class="cat-grid" id="cat-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<!-- Modal crear/editar -->
+<div class="modal-overlay" id="modal-cat">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nueva Categoría</span>
+      <button class="modal-close" onclick="closeModal('modal-cat')" id="modal-close-btn"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Nombre</label>
+          <input class="form-input" id="f-nombre" placeholder="Ej: Mascotas, Gimnasio...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <input class="form-input" id="f-color" type="color" value="#2563EB" style="height:40px;padding:4px">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ícono</label>
+        <div class="icon-picker" id="icon-picker"></div>
+        <input type="hidden" id="f-icono" value="houseS">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-cat')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar" onclick="guardarCategoria()"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curUser = null;
+const DEFAULT_IDS = ['casa','moto','esposa','personal','deudas'];
+
+function buildIconPicker(selected) {
+  document.getElementById('icon-picker').innerHTML = ICON_OPTIONS.map(opt => `
+    <div class="icon-opt${opt.key===selected?' sel':''}" onclick="selectIcon('${opt.key}')" title="${opt.label}">
+      ${SVG[opt.key] ? SVG[opt.key].replace('<svg ',`<svg width="22" height="22" `) : ''}
+      <span>${opt.label}</span>
+    </div>`).join('');
+  document.getElementById('f-icono').value = selected;
+}
+
+function selectIcon(key) {
+  document.querySelectorAll('.icon-opt').forEach(el => el.classList.remove('sel'));
+  document.querySelector(`.icon-opt[onclick="selectIcon('${key}')"]`)?.classList.add('sel');
+  document.getElementById('f-icono').value = key;
+}
+
+async function loadCats() {
+  const grid = document.getElementById('cat-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const cats = await getCategorias(curUser.uid) || [];
+  window._CATS = cats;
+
+  if (!cats.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-state-title">Sin categorías</div></div>';
+    return;
+  }
+
+  grid.innerHTML = cats.map(cat => {
+    const isDefault = DEFAULT_IDS.includes(cat.id);
+    const iconSvg = SVG[cat.icono] ? SVG[cat.icono].replace('<svg ',`<svg width="22" height="22" `) : '';
+    return `
+    <div class="cat-card">
+      <div class="cat-card-icon" style="background:${hexToRgba(cat.color,.12)};color:${cat.color}">${iconSvg}</div>
+      <div class="cat-card-info">
+        <div class="cat-card-name">${cat.nombre}</div>
+        <div class="cat-card-id">${isDefault ? '<span class="default-badge">Predeterminada</span>' : 'ID: '+cat.id}</div>
+      </div>
+      <div class="cat-card-actions">
+        <button class="btn btn-ghost btn-icon" onclick="editarCat('${cat.id}')" title="Editar">${SVG.pencil}</button>
+        ${!isDefault ? `<button class="btn btn-ghost btn-icon" onclick="borrarCat('${cat.id}')" title="Eliminar">${SVG.trash}</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function resetForm(cat = null) {
+  document.getElementById('edit-id').value   = cat ? cat.id : '';
+  document.getElementById('f-nombre').value  = cat ? cat.nombre : '';
+  document.getElementById('f-color').value   = cat ? cat.color  : '#2563EB';
+  document.getElementById('modal-title').textContent = cat ? 'Editar Categoría' : 'Nueva Categoría';
+  buildIconPicker(cat ? cat.icono : 'houseS');
+}
+
+function editarCat(id) {
+  const cat = (window._CATS||[]).find(c=>c.id===id);
+  if (!cat) return;
+  resetForm(cat);
+  openModal('modal-cat');
+}
+
+async function guardarCategoria() {
+  const nombre = document.getElementById('f-nombre').value.trim();
+  const color  = document.getElementById('f-color').value;
+  const icono  = document.getElementById('f-icono').value;
+  const editId = document.getElementById('edit-id').value;
+
+  if (!nombre) { showToast('Ingresa un nombre','warning'); return; }
+
+  let cats = [...(window._CATS || [])];
+
+  if (editId) {
+    const idx = cats.findIndex(c => c.id === editId);
+    if (idx >= 0) cats[idx] = { ...cats[idx], nombre, color, icono };
+  } else {
+    const id = genId();
+    cats.push({ id, nombre, color, icono });
+  }
+
+  try {
+    await saveCategorias(curUser.uid, cats);
+    window._CATS = cats;
+    showToast(editId ? 'Categoría actualizada' : 'Categoría creada');
+    closeModal('modal-cat');
+    loadCats();
+  } catch(e) { showToast('Error al guardar','error'); }
+}
+
+async function borrarCat(id) {
+  if (!confirm('¿Eliminar esta categoría? Los gastos registrados en ella no se borran.')) return;
+  let cats = (window._CATS||[]).filter(c => c.id !== id);
+  try {
+    await saveCategorias(curUser.uid, cats);
+    window._CATS = cats;
+    showToast('Categoría eliminada');
+    loadCats();
+  } catch(e) { showToast('Error al eliminar','error'); }
+}
+
+requireAuth(async user => {
+  curUser = user;
+  renderNav('categorias');
+  document.getElementById('menu-toggle').innerHTML    = SVG.menu;
+  document.getElementById('btn-new').innerHTML        = SVG.plus + ' Nueva categoría';
+  document.getElementById('btn-guardar').innerHTML    = SVG.save + ' Guardar';
+  document.getElementById('modal-close-btn').innerHTML= SVG.x;
+  document.getElementById('alert-icon').innerHTML     = SVG.alertTri;
+  document.getElementById('page-title-el').innerHTML  = SVG.settings + ' Categorías';
+  document.getElementById('app-loading').style.display= 'none';
+  document.getElementById('app').style.display        = 'flex';
+
+  document.getElementById('btn-new').onclick = () => { resetForm(); openModal('modal-cat'); };
+  await initCategorias(curUser.uid);
+  loadCats();
+});
+</script>
+</body>
+</html>

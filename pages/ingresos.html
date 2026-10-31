@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Ingresos</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle" id="page-subtitle">—</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="month-selector">
+          <button class="month-btn" onclick="changeMonth(-1)" id="btn-prev"></button>
+          <span class="month-text" id="month-text">...</span>
+          <button class="month-btn" onclick="changeMonth(1)" id="btn-next"></button>
+        </div>
+        <button class="btn btn-success" id="btn-new" onclick="openModal('modal-ingreso');resetForm()"></button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="summary-grid mb-6" style="grid-template-columns:repeat(2,1fr)">
+        <div class="summary-card income">
+          <div class="summary-label">Total ingresos</div>
+          <div class="summary-value green" id="total-mes">$0</div>
+          <div class="summary-icon" id="icon-total"></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Fuentes de ingreso</div>
+          <div class="summary-value" id="cant-mes">0</div>
+          <div class="summary-icon" id="icon-cant"></div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Nombre / Fuente</th><th>Fecha</th><th class="text-right">Valor</th><th></th></tr>
+          </thead>
+          <tbody id="tabla-ingresos">
+            <tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr>
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--bg)">
+              <td colspan="2" style="font-weight:700;padding:12px 14px">TOTAL</td>
+              <td class="text-right td-amt green" id="total-footer" style="padding:12px 14px">$0</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-ingreso">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nuevo Ingreso</span>
+      <button class="modal-close" onclick="closeModal('modal-ingreso')" id="modal-close-btn"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-group">
+        <label class="form-label">Nombre / Fuente</label>
+        <input class="form-input" id="f-nombre" placeholder="Ej: Salario, Freelance...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Valor ($)</label>
+          <input class="form-input" id="f-valor" type="number" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input class="form-input" id="f-fecha" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción (opcional)</label>
+        <input class="form-input" id="f-desc" placeholder="Notas...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-ingreso')">Cancelar</button>
+      <button class="btn btn-success" onclick="guardarIngreso()" id="btn-guardar"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curMonth = getSelectedMonth();
+let curUser  = null;
+let _cache   = [];
+
+function updateMonthUI() {
+  document.getElementById('month-text').textContent    = formatMonth(curMonth);
+  document.getElementById('page-subtitle').textContent = formatMonth(curMonth);
+}
+
+function changeMonth(dir) {
+  curMonth = dir < 0 ? prevMonth(curMonth) : nextMonth(curMonth);
+  setSelectedMonth(curMonth);
+  updateMonthUI();
+  loadIngresos();
+}
+
+async function loadIngresos() {
+  const tbody = document.getElementById('tabla-ingresos');
+  tbody.innerHTML = '<tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr>';
+  _cache = await getIngresos(curUser.uid, curMonth);
+  const total = _cache.reduce((s,i)=>s+(i.valor||0),0);
+  document.getElementById('total-mes').textContent    = formatCOP(total);
+  document.getElementById('cant-mes').textContent     = _cache.length;
+  document.getElementById('total-footer').textContent = formatCOP(total);
+
+  if (!_cache.length) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="empty-state-title">Sin ingresos este mes</div><div class="empty-state-sub">Haz clic en "Nuevo ingreso" para comenzar</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = _cache.map(i => `
+    <tr>
+      <td><strong>${i.nombre}</strong>${i.descripcion?'<br><span style="font-size:12px;color:var(--text3)">'+i.descripcion+'</span>':''}</td>
+      <td>${formatDate(i.fecha)}</td>
+      <td class="text-right td-amt green">${formatCOP(i.valor)}</td>
+      <td style="white-space:nowrap;display:flex;gap:4px">
+        <button class="btn btn-ghost btn-icon" onclick="editarIngreso('${i.id}')" title="Editar">${SVG.pencil}</button>
+        <button class="btn btn-ghost btn-icon" onclick="borrarIngreso('${i.id}')" title="Eliminar">${SVG.trash}</button>
+      </td>
+    </tr>`).join('');
+}
+
+function resetForm() {
+  document.getElementById('edit-id').value = '';
+  document.getElementById('f-nombre').value= '';
+  document.getElementById('f-valor').value = '';
+  document.getElementById('f-fecha').value = todayStr();
+  document.getElementById('f-desc').value  = '';
+  document.getElementById('modal-title').textContent = 'Nuevo Ingreso';
+}
+
+function editarIngreso(id) {
+  const item = _cache.find(i=>i.id===id);
+  if (!item) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('f-nombre').value= item.nombre;
+  document.getElementById('f-valor').value = item.valor;
+  document.getElementById('f-fecha').value = item.fecha;
+  document.getElementById('f-desc').value  = item.descripcion||'';
+  document.getElementById('modal-title').textContent = 'Editar Ingreso';
+  openModal('modal-ingreso');
+}
+
+async function guardarIngreso() {
+  const nombre= document.getElementById('f-nombre').value.trim();
+  const valor = parseFloat(document.getElementById('f-valor').value);
+  const fecha = document.getElementById('f-fecha').value;
+  const desc  = document.getElementById('f-desc').value.trim();
+  if (!nombre||!valor||!fecha) { showToast('Completa los campos requeridos','warning'); return; }
+  const id = document.getElementById('edit-id').value;
+  try {
+    if (id) { await updateIngreso(curUser.uid,curMonth,id,{nombre,valor,fecha,descripcion:desc}); showToast('Ingreso actualizado'); }
+    else    { await addIngreso(curUser.uid,curMonth,{nombre,valor,fecha,descripcion:desc});        showToast('Ingreso guardado'); }
+    closeModal('modal-ingreso');
+    loadIngresos();
+  } catch(e) { showToast('Error al guardar','error'); }
+}
+
+async function borrarIngreso(id) {
+  if (!confirm('¿Eliminar este ingreso?')) return;
+  try { await deleteIngreso(curUser.uid,curMonth,id); showToast('Ingreso eliminado'); loadIngresos(); }
+  catch(e) { showToast('Error al eliminar','error'); }
+}
+
+requireAuth(user => {
+  curUser = user;
+  renderNav('ingresos');
+  document.getElementById('menu-toggle').innerHTML   = SVG.menu;
+  document.getElementById('btn-prev').innerHTML      = SVG.chevLeft;
+  document.getElementById('btn-next').innerHTML      = SVG.chevRight;
+  document.getElementById('btn-new').innerHTML       = SVG.plus + ' Nuevo ingreso';
+  document.getElementById('btn-guardar').innerHTML   = SVG.save + ' Guardar';
+  document.getElementById('modal-close-btn').innerHTML = SVG.x;
+  document.getElementById('icon-total').innerHTML    = SVG.wallet;
+  document.getElementById('icon-cant').innerHTML     = SVG.clipboard;
+  document.getElementById('page-title-el').innerHTML = SVG.wallet + ' Ingresos';
+  document.getElementById('app-loading').style.display = 'none';
+  document.getElementById('app').style.display         = 'flex';
+  updateMonthUI();
+  loadIngresos();
+});
+</script>
+</body>
+</html>

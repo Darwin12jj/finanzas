@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle" id="page-subtitle">Resumen del mes</p>
+        </div>
+      </div>
+      <div class="month-selector">
+        <button class="month-btn" onclick="changeMonth(-1)" id="btn-prev"></button>
+        <span class="month-text" id="month-text">...</span>
+        <button class="month-btn" onclick="changeMonth(1)" id="btn-next"></button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div id="deficit-alert" class="alert alert-danger mb-4" style="display:none">
+        <span id="alert-icon"></span>
+        <div><strong>¡Déficit este mes!</strong> Tus gastos superan tus ingresos.</div>
+      </div>
+
+      <div class="summary-grid mb-6">
+        <div class="summary-card income">
+          <div class="summary-label">Total Ingresos</div>
+          <div class="summary-value green" id="total-ingresos">$0</div>
+          <div class="summary-sub" id="ingresos-count">0 fuentes</div>
+          <div class="summary-icon" id="icon-ingresos"></div>
+        </div>
+        <div class="summary-card expense">
+          <div class="summary-label">Total Egresos</div>
+          <div class="summary-value red" id="total-egresos">$0</div>
+          <div class="summary-sub" id="egresos-count">0 gastos</div>
+          <div class="summary-icon" id="icon-egresos"></div>
+        </div>
+        <div class="summary-card balance" id="balance-card">
+          <div class="summary-label">Saldo Libre</div>
+          <div class="summary-value" id="saldo-libre">$0</div>
+          <div class="summary-sub" id="saldo-pct">—</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px" id="metas-hint" style="display:none"></div>
+          <div class="summary-icon" id="icon-saldo"></div>
+        </div>
+      </div>
+
+      <div class="grid-2 mb-6">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Gastos por Categoría</span></div>
+          <div class="chart-wrap" style="height:220px" id="expense-chart-wrap"><canvas id="expense-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Estado Presupuesto</span>
+            <a href="pages/presupuesto.html" class="btn btn-ghost btn-sm" id="ver-presup"></a>
+          </div>
+          <div id="budget-list"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Últimos 6 Meses</span>
+          <a href="pages/historico.html" class="btn btn-ghost btn-sm" id="ver-hist"></a>
+        </div>
+        <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script>
+let curMonth = getSelectedMonth();
+let curUser  = null;
+let chartExp = null;
+let chartHist= null;
+
+function updateMonthUI() {
+  document.getElementById('month-text').textContent    = formatMonth(curMonth);
+  document.getElementById('page-subtitle').textContent = 'Resumen de ' + formatMonth(curMonth);
+}
+
+function changeMonth(dir) {
+  curMonth = dir < 0 ? prevMonth(curMonth) : nextMonth(curMonth);
+  setSelectedMonth(curMonth);
+  updateMonthUI();
+  loadDashboard();
+}
+
+async function loadDashboard() {
+  try {
+    const [resumen, presupuestos, metas] = await Promise.all([
+      getResumenMes(curUser.uid, curMonth),
+      getPresupuestos(curUser.uid),
+      getMetas(curUser.uid)
+    ]);
+    const totalMetas = metas.reduce((s, m) => s + (m.actual || 0), 0);
+    renderCards(resumen, totalMetas);
+    renderExpenseChart(resumen.egresosPorCategoria);
+    renderBudgetList(resumen.egresosPorCategoria, presupuestos);
+    await renderHistoryChart();
+    document.getElementById('deficit-alert').style.display = resumen.saldoLibre < 0 ? 'flex' : 'none';
+  } catch(e) { console.error(e); showToast('Error al cargar datos','error'); }
+}
+
+function renderCards(r, totalMetas) {
+  document.getElementById('total-ingresos').textContent = formatCOP(r.totalIngresos);
+  document.getElementById('ingresos-count').textContent = r.ingresos.length + ' fuente' + (r.ingresos.length!==1?'s':'');
+  document.getElementById('total-egresos').textContent  = formatCOP(r.totalEgresos);
+  document.getElementById('egresos-count').textContent  = r.egresos.length + ' gasto' + (r.egresos.length!==1?'s':'');
+
+  const saldoReal = r.saldoLibre - (totalMetas || 0);
+  const saldoEl   = document.getElementById('saldo-libre');
+  const pctEl     = document.getElementById('saldo-pct');
+  const card      = document.getElementById('balance-card');
+
+  saldoEl.textContent = formatCOP(saldoReal);
+
+  if (saldoReal >= 0) {
+    saldoEl.className = 'summary-value green';
+    card.className    = 'summary-card balance';
+    const pct = r.totalIngresos > 0 ? Math.round(saldoReal / r.totalIngresos * 100) : 0;
+    pctEl.textContent = pct + '% disponible';
+  } else {
+    saldoEl.className = 'summary-value red';
+    card.className    = 'summary-card balance neg';
+    pctEl.textContent = 'Déficit del mes';
+  }
+
+  // Show metas deduction hint
+  const metasHintEl = document.getElementById('metas-hint');
+  if (totalMetas > 0) {
+    metasHintEl.textContent = `− ${formatCOP(totalMetas)} en metas`;
+    metasHintEl.style.display = 'block';
+  } else {
+    metasHintEl.style.display = 'none';
+  }
+}
+
+function renderExpenseChart(bycat) {
+  const wrap   = document.getElementById('expense-chart-wrap');
+  const canvas = document.getElementById('expense-chart');
+  const cats   = getActiveCats();
+  const data   = cats.map(c => bycat[c.id]||0);
+  if (!data.some(v=>v>0)) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-title">Sin gastos este mes</div></div>';
+    return;
+  }
+  if (chartExp) chartExp.destroy();
+  chartExp = new Chart(canvas.getContext('2d'), {
+    type:'doughnut',
+    data:{ labels: cats.map(c=>c.nombre), datasets:[{ data, backgroundColor: cats.map(c=>c.color), borderWidth:2, borderColor:'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ padding:14, font:{size:12} } },
+        tooltip:{ callbacks:{ label: ctx=>' '+cats[ctx.dataIndex].nombre+': '+formatCOP(ctx.parsed) } } } }
+  });
+}
+
+function renderBudgetList(bycat, presupuestos) {
+  const el = document.getElementById('budget-list');
+  let html = '';
+  getActiveCats().forEach(cat => {
+    const gasto = bycat[cat.id]||0, limite = presupuestos[cat.id]||0;
+    if (!limite) return;
+    const pct   = Math.min(Math.round(gasto/limite*100),100);
+    const state = pct>=100?'danger':pct>=80?'warning':'safe';
+    html += `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">${getCategoryIcon(cat.id,14)} ${cat.nombre}</span>
+        <span style="font-size:12px;color:var(--text2)">${formatCOP(gasto)} / ${formatCOP(limite)}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill ${state}" style="width:${pct}%"></div></div>
+      <div style="font-size:11px;color:var(--text3);text-align:right">${pct}%${pct>=100?' — Límite superado':''}</div>
+    </div>`;
+  });
+  el.innerHTML = html || '<div class="empty-state" style="padding:20px"><p>Sin presupuestos.<br><a href="pages/presupuesto.html" style="color:var(--primary)">Configurar</a></p></div>';
+}
+
+async function renderHistoryChart() {
+  const months = getLast6Months(curMonth);
+  const labels = months.map(m => formatMonth(m).split(' ')[0]);
+  const data   = await Promise.all(months.map(m => getResumenMes(curUser.uid,m)));
+  const canvas = document.getElementById('history-chart');
+  if (chartHist) chartHist.destroy();
+  chartHist = new Chart(canvas.getContext('2d'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      { label:'Ingresos', data:data.map(d=>d.totalIngresos), backgroundColor:'#22c55e33', borderColor:'#22C55E', borderWidth:2, borderRadius:4 },
+      { label:'Egresos',  data:data.map(d=>d.totalEgresos),  backgroundColor:'#ef444433', borderColor:'#EF4444', borderWidth:2, borderRadius:4 },
+      { label:'Saldo', data:data.map(d=>d.saldoLibre), type:'line', borderColor:'#2563EB', backgroundColor:'#2563eb15', borderWidth:2, tension:.3, fill:false, pointBackgroundColor:'#2563EB' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{position:'top',labels:{font:{size:12},padding:14}},
+        tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+formatCOP(ctx.parsed.y)}} },
+      scales:{y:{beginAtZero:true, ticks:{callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+v}}} }
+  });
+}
+
+requireAuth(async user => {
+  curUser = user;
+  renderNav('index');
+  document.getElementById('menu-toggle').innerHTML    = SVG.menu;
+  document.getElementById('btn-prev').innerHTML       = SVG.chevLeft;
+  document.getElementById('btn-next').innerHTML       = SVG.chevRight;
+  document.getElementById('icon-ingresos').innerHTML  = SVG.wallet;
+  document.getElementById('icon-egresos').innerHTML   = SVG.creditCard;
+  document.getElementById('icon-saldo').innerHTML     = SVG.dollar;
+  document.getElementById('alert-icon').innerHTML     = SVG.alertTri;
+  document.getElementById('ver-presup').innerHTML     = 'Ver todo ' + SVG.arrowRight;
+  document.getElementById('ver-hist').innerHTML       = 'Ver histórico ' + SVG.arrowRight;
+  document.querySelector('.page-title').innerHTML     = SVG.home + ' Dashboard';
+  document.getElementById('app-loading').style.display = 'none';
+  document.getElementById('app').style.display         = 'flex';
+  await initCategorias(curUser.uid);
+  updateMonthUI();
+  loadDashboard();
+});
+</script>
+</body>
+</html>

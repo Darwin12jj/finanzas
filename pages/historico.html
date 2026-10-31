@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==="1")document.documentElement.classList.add("dark");}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Histórico</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle">Evolución de tus finanzas</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label style="font-size:13px;color:var(--text2)">Meses:</label>
+        <select class="form-input form-select" id="rango" style="width:auto" onchange="loadHistorico()">
+          <option value="6">6 meses</option>
+          <option value="12" selected>12 meses</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="card mb-6">
+        <div class="card-header"><span class="card-title">Tendencia Mensual</span></div>
+        <div class="chart-wrap" style="height:300px"><canvas id="line-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Resumen por Mes</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Mes</th><th class="text-right">Ingresos</th><th class="text-right">Egresos</th><th class="text-right">Saldo</th><th class="text-right">% Ahorro</th></tr>
+            </thead>
+            <tbody id="tabla-historico">
+              <tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curUser=null, lineChart=null;
+
+function getMonths(n) {
+  const cur=getSelectedMonth(); const months=[]; let m=cur;
+  for (let i=0;i<n;i++) { months.unshift(m); m=prevMonth(m); }
+  return months;
+}
+
+async function loadHistorico() {
+  const n=parseInt(document.getElementById('rango').value)||12;
+  const months=getMonths(n);
+  const data=await Promise.all(months.map(m=>getResumenMes(curUser.uid,m)));
+  renderLineChart(months,data); renderTable(months,data);
+}
+
+function renderLineChart(months,data) {
+  const labels=months.map(m=>formatMonth(m).split(' ')[0]);
+  const canvas=document.getElementById('line-chart');
+  if (lineChart) lineChart.destroy();
+  lineChart=new Chart(canvas.getContext('2d'),{
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'Ingresos', data:data.map(d=>d.totalIngresos), borderColor:'#22C55E', backgroundColor:'#22c55e15', borderWidth:2, tension:.3, fill:true, pointBackgroundColor:'#22C55E' },
+      { label:'Egresos',  data:data.map(d=>d.totalEgresos),  borderColor:'#EF4444', backgroundColor:'#ef444415', borderWidth:2, tension:.3, fill:true, pointBackgroundColor:'#EF4444' },
+      { label:'Saldo',    data:data.map(d=>d.saldoLibre),    borderColor:'#2563EB', backgroundColor:'transparent', borderWidth:2.5, tension:.3, fill:false, pointBackgroundColor:'#2563EB', borderDash:[6,3] }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{position:'top',labels:{font:{size:12},padding:14}},
+        tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+formatCOP(ctx.parsed.y)}} },
+      scales:{y:{beginAtZero:false, ticks:{callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+v}}} }
+  });
+}
+
+function renderTable(months,data) {
+  document.getElementById('tabla-historico').innerHTML=[...months].reverse().map((m,i)=>{
+    const d=data[months.length-1-i];
+    const pct=d.totalIngresos>0?Math.round(d.saldoLibre/d.totalIngresos*100):0;
+    const cls=d.saldoLibre>=0?'green':'red';
+    return `<tr>
+      <td style="font-weight:600">${formatMonth(m)}</td>
+      <td class="text-right td-amt green">${formatCOP(d.totalIngresos)}</td>
+      <td class="text-right td-amt red">${formatCOP(d.totalEgresos)}</td>
+      <td class="text-right td-amt ${cls}">${formatCOP(d.saldoLibre)}</td>
+      <td class="text-right" style="font-weight:700;color:var(--${pct>=0?'success':'danger'})">${pct}%</td>
+    </tr>`;
+  }).join('');
+}
+
+requireAuth(async user=>{
+  curUser=user;
+  renderNav('historico');
+  document.getElementById('menu-toggle').innerHTML   = SVG.menu;
+  document.getElementById('page-title-el').innerHTML = SVG.trendingUp + ' Histórico';
+  document.getElementById('app-loading').style.display='none';
+  document.getElementById('app').style.display='flex';
+  await initCategorias(curUser.uid);
+  loadHistorico();
+});
+</script>
+</body>
+</html>

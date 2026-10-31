@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem('finanz_dark')==='1')document.documentElement.classList.add('dark');}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinanzApp – Ajustes</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .cat-grid  { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:16px; }
+    .cat-card  { background:var(--bg); border:1px solid var(--border); border-radius:var(--rs); padding:14px; display:flex; align-items:center; gap:12px; }
+    .cat-icon-box { width:40px; height:40px; border-radius:var(--rs); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .cat-icon-box svg { width:20px; height:20px; }
+    .cat-name  { font-size:14px; font-weight:700; flex:1; }
+    .cat-sub   { font-size:11px; color:var(--text3); margin-top:2px; }
+    .def-badge { font-size:10px; font-weight:700; background:var(--border); color:var(--text3); padding:2px 6px; border-radius:var(--rf); text-transform:uppercase; }
+    .icon-picker { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:6px; }
+    .icon-opt  { display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 4px; border-radius:var(--rs); cursor:pointer; border:2px solid transparent; font-size:10px; color:var(--text2); transition:all .15s; text-align:center; }
+    .icon-opt svg { width:20px; height:20px; }
+    .icon-opt:hover { border-color:var(--border); background:var(--bg); }
+    .icon-opt.sel   { border-color:var(--primary); background:var(--primary-l); color:var(--primary); }
+  </style>
+</head>
+<body>
+<div id="app-loading" style="position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:999"><div class="spinner"></div></div>
+<div class="app-layout" id="app" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle"></button>
+        <div>
+          <h1 class="page-title" id="page-title-el"></h1>
+          <p class="page-subtitle">Preferencias de la aplicación</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body" style="max-width:700px">
+
+      <!-- ── Perfil ─────────────────────────────────────────────────── -->
+      <div class="settings-section">
+        <h2 id="h-perfil"></h2>
+        <p>Cuenta con la que iniciaste sesión</p>
+        <div style="display:flex;align-items:center;gap:16px">
+          <img src="" id="profile-avatar" style="width:52px;height:52px;border-radius:50%;object-fit:cover" alt="Avatar">
+          <div>
+            <div style="font-size:16px;font-weight:700" id="profile-name">—</div>
+            <div style="font-size:13px;color:var(--text2);margin-top:2px" id="profile-email">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Apariencia ─────────────────────────────────────────────── -->
+      <div class="settings-section">
+        <h2 id="h-apariencia"></h2>
+        <p>Cambia entre modo claro y oscuro</p>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Tema oscuro</div>
+            <div class="settings-sub">Se guarda en este dispositivo</div>
+          </div>
+          <div class="theme-toggle" id="theme-toggle" onclick="toggleTheme()"></div>
+        </div>
+      </div>
+
+      <!-- ── Día de corte ───────────────────────────────────────────── -->
+      <div class="settings-section">
+        <h2 id="h-corte"></h2>
+        <p>Si te pagan en un día específico del mes, ajusta el corte para que el "mes actual" refleje tu ciclo real.</p>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Día de inicio del período</div>
+            <div class="settings-sub" id="corte-desc">Actualmente el mes inicia el día 1</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-input form-select" id="select-corte" style="width:100px" onchange="actualizarCorteDesc()">
+              <option value="1">Día 1</option>
+              <option value="5">Día 5</option>
+              <option value="10">Día 10</option>
+              <option value="15">Día 15</option>
+              <option value="20">Día 20</option>
+              <option value="25">Día 25</option>
+              <option value="28">Día 28</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="guardarCorte()" id="btn-corte"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Exportar PDF ───────────────────────────────────────────── -->
+      <div class="settings-section">
+        <h2 id="h-export"></h2>
+        <p>Genera un reporte mensual en PDF para imprimir o archivar.</p>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Mes a exportar</div>
+            <div class="settings-sub">Selecciona el mes del reporte</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input class="form-input" type="month" id="export-mes" style="width:160px">
+            <button class="btn btn-outline" onclick="doExportPDF()" id="btn-export"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Categorías ─────────────────────────────────────────────── -->
+      <div class="settings-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 id="h-cats"></h2>
+            <p style="margin-bottom:0">Personaliza las categorías de tus egresos</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-new-cat"></button>
+        </div>
+        <div class="alert alert-warning" style="margin-top:14px;margin-bottom:0" id="cats-alert">
+          <span id="cats-alert-icon"></span>
+          <span>Al eliminar una categoría, los gastos registrados en ella no se borran.</span>
+        </div>
+        <div class="cat-grid" id="cat-grid">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Zona de peligro ────────────────────────────────────────── -->
+      <div class="settings-section danger-zone">
+        <h2 id="h-danger"></h2>
+        <p>Esta acción es <strong>irreversible</strong>. Se eliminarán todos tus ingresos, egresos, metas, presupuestos y categorías.</p>
+        <div id="delete-form" style="display:none;margin-top:16px">
+          <div class="form-group">
+            <label class="form-label">Escribe <strong>ELIMINAR</strong> para confirmar</label>
+            <input class="form-input" id="confirm-input" placeholder="ELIMINAR" oninput="checkConfirm()">
+          </div>
+          <button class="btn btn-danger" id="btn-confirm-delete" disabled onclick="ejecutarEliminacion()">Eliminar todos mis datos</button>
+          <button class="btn btn-ghost" onclick="cancelarDelete()" style="margin-left:8px">Cancelar</button>
+        </div>
+        <div id="delete-trigger">
+          <button class="btn btn-danger btn-sm" onclick="mostrarDeleteForm()" id="btn-danger"></button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<!-- Modal categoría -->
+<div class="modal-overlay" id="modal-cat">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="cat-modal-title">Nueva Categoría</span>
+      <button class="modal-close" id="cat-modal-close" onclick="closeModal('modal-cat')"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cat-edit-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Nombre</label>
+          <input class="form-input" id="cat-nombre" placeholder="Ej: Mascotas, Gimnasio...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <input class="form-input" id="cat-color" type="color" value="#2563EB" style="height:40px;padding:4px">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ícono</label>
+        <div class="icon-picker" id="icon-picker"></div>
+        <input type="hidden" id="cat-icono" value="houseS">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-cat')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar-cat" onclick="guardarCategoria()"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/nav.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/db.js"></script>
+<script>
+let curUser = null;
+const DEFAULT_IDS = ['casa','moto','esposa','personal','deudas'];
+
+// ── Tema oscuro ───────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('finanz_dark', isDark ? '1' : '0');
+  document.getElementById('theme-toggle').classList.toggle('on', isDark);
+}
+
+function applyInitialTheme() {
+  const isDark = localStorage.getItem('finanz_dark') === '1';
+  document.documentElement.classList.toggle('dark', isDark);
+  document.getElementById('theme-toggle').classList.toggle('on', isDark);
+}
+
+// ── Día de corte ──────────────────────────────────────────────────────────
+function actualizarCorteDesc() {
+  const v = document.getElementById('select-corte').value;
+  document.getElementById('corte-desc').textContent = v === '1'
+    ? 'El mes inicia el día 1 (por defecto)'
+    : `El período mensual inicia el día ${v} de cada mes`;
+}
+
+async function guardarCorte() {
+  const corte = parseInt(document.getElementById('select-corte').value);
+  localStorage.setItem('finanz_corte', corte.toString());
+  await saveSettings(curUser.uid, { corte });
+  actualizarCorteDesc();
+  showToast('Día de corte guardado');
+}
+
+// ── Exportar PDF ──────────────────────────────────────────────────────────
+async function doExportPDF() {
+  const mes = document.getElementById('export-mes').value;
+  if (!mes) { showToast('Selecciona un mes', 'warning'); return; }
+  const btn = document.getElementById('btn-export');
+  btn.disabled = true;
+  try {
+    await exportarPDF(curUser.uid, mes);
+    showToast('PDF abierto en nueva ventana');
+  } catch(e) { showToast('Error al generar el PDF', 'error'); }
+  btn.disabled = false;
+  btn.innerHTML = SVG.fileText + ' Exportar PDF';
+}
+
+// ── Categorías ────────────────────────────────────────────────────────────
+function buildIconPicker(selected) {
+  document.getElementById('icon-picker').innerHTML = ICON_OPTIONS.map(opt => `
+    <div class="icon-opt${opt.key===selected?' sel':''}" onclick="selectIcon('${opt.key}')" title="${opt.label}">
+      ${SVG[opt.key]?SVG[opt.key].replace('<svg ',`<svg width="20" height="20" `):''}
+      <span>${opt.label}</span>
+    </div>`).join('');
+  document.getElementById('cat-icono').value = selected;
+}
+
+function selectIcon(key) {
+  document.querySelectorAll('.icon-opt').forEach(el => el.classList.remove('sel'));
+  document.querySelector(`.icon-opt[onclick="selectIcon('${key}')"]`)?.classList.add('sel');
+  document.getElementById('cat-icono').value = key;
+}
+
+async function loadCats() {
+  const grid = document.getElementById('cat-grid');
+  const cats  = await getCategorias(curUser.uid) || [];
+  window._CATS = cats;
+  if (!cats.length) { grid.innerHTML = '<p style="color:var(--text3);font-size:13px;margin-top:12px">Sin categorías.</p>'; return; }
+  grid.innerHTML = cats.map(cat => {
+    const isDefault = DEFAULT_IDS.includes(cat.id);
+    const iconSvg   = SVG[cat.icono] ? SVG[cat.icono].replace('<svg ',`<svg width="20" height="20" `) : '';
+    return `
+    <div class="cat-card">
+      <div class="cat-icon-box" style="background:${hexToRgba(cat.color,.12)};color:${cat.color}">${iconSvg}</div>
+      <div style="flex:1;min-width:0">
+        <div class="cat-name">${cat.nombre}</div>
+        <div class="cat-sub">${isDefault?'<span class="def-badge">predeterminada</span>':''}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-icon" onclick="editarCat('${cat.id}')" title="Editar">${SVG.pencil}</button>
+        ${!isDefault?`<button class="btn btn-ghost btn-icon" onclick="borrarCat('${cat.id}')" title="Eliminar">${SVG.trash}</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function resetCatForm(cat = null) {
+  document.getElementById('cat-edit-id').value = cat ? cat.id : '';
+  document.getElementById('cat-nombre').value  = cat ? cat.nombre : '';
+  document.getElementById('cat-color').value   = cat ? cat.color  : '#2563EB';
+  document.getElementById('cat-modal-title').textContent = cat ? 'Editar Categoría' : 'Nueva Categoría';
+  buildIconPicker(cat ? cat.icono : 'houseS');
+}
+
+function editarCat(id) {
+  const cat = (window._CATS||[]).find(c=>c.id===id);
+  if (!cat) return;
+  resetCatForm(cat);
+  openModal('modal-cat');
+}
+
+async function guardarCategoria() {
+  const nombre = document.getElementById('cat-nombre').value.trim();
+  const color  = document.getElementById('cat-color').value;
+  const icono  = document.getElementById('cat-icono').value;
+  const editId = document.getElementById('cat-edit-id').value;
+  if (!nombre) { showToast('Ingresa un nombre', 'warning'); return; }
+  let cats = [...(window._CATS||[])];
+  if (editId) {
+    const idx = cats.findIndex(c=>c.id===editId);
+    if (idx>=0) cats[idx] = { ...cats[idx], nombre, color, icono };
+  } else {
+    cats.push({ id: genId(), nombre, color, icono });
+  }
+  try {
+    await saveCategorias(curUser.uid, cats);
+    window._CATS = cats;
+    showToast(editId ? 'Categoría actualizada' : 'Categoría creada');
+    closeModal('modal-cat');
+    loadCats();
+  } catch(e) { showToast('Error al guardar', 'error'); }
+}
+
+async function borrarCat(id) {
+  if (!confirm('¿Eliminar esta categoría?')) return;
+  const cats = (window._CATS||[]).filter(c=>c.id!==id);
+  try {
+    await saveCategorias(curUser.uid, cats);
+    window._CATS = cats;
+    showToast('Categoría eliminada');
+    loadCats();
+  } catch(e) { showToast('Error al eliminar', 'error'); }
+}
+
+// ── Eliminar cuenta ───────────────────────────────────────────────────────
+function mostrarDeleteForm() {
+  document.getElementById('delete-trigger').style.display = 'none';
+  document.getElementById('delete-form').style.display    = 'block';
+}
+
+function cancelarDelete() {
+  document.getElementById('delete-trigger').style.display = 'block';
+  document.getElementById('delete-form').style.display    = 'none';
+  document.getElementById('confirm-input').value          = '';
+}
+
+function checkConfirm() {
+  document.getElementById('btn-confirm-delete').disabled =
+    document.getElementById('confirm-input').value !== 'ELIMINAR';
+}
+
+async function ejecutarEliminacion() {
+  const btn = document.getElementById('btn-confirm-delete');
+  btn.disabled = true; btn.textContent = 'Eliminando...';
+  try {
+    await deleteAllUserData(curUser.uid);
+    await auth.signOut();
+    window.location.href = '../login.html';
+  } catch(e) {
+    showToast('Error al eliminar los datos', 'error');
+    btn.disabled = false; btn.textContent = 'Eliminar todos mis datos';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+requireAuth(async user => {
+  curUser = user;
+  renderNav('ajustes');
+
+  // SVG icons
+  document.getElementById('menu-toggle').innerHTML     = SVG.menu;
+  document.getElementById('page-title-el').innerHTML   = SVG.settings  + ' Ajustes';
+  document.getElementById('h-perfil').innerHTML        = SVG.user      + ' Perfil';
+  document.getElementById('h-apariencia').innerHTML    = SVG.moon      + ' Apariencia';
+  document.getElementById('h-corte').innerHTML         = SVG.calendar  + ' Día de corte';
+  document.getElementById('h-export').innerHTML        = SVG.fileText  + ' Exportar PDF';
+  document.getElementById('h-cats').innerHTML          = SVG.settings  + ' Categorías';
+  document.getElementById('h-danger').innerHTML        = SVG.trash     + ' Zona de peligro';
+  document.getElementById('btn-corte').innerHTML       = SVG.save      + ' Guardar';
+  document.getElementById('btn-export').innerHTML      = SVG.fileText  + ' Exportar PDF';
+  document.getElementById('btn-new-cat').innerHTML     = SVG.plus      + ' Nueva';
+  document.getElementById('btn-guardar-cat').innerHTML = SVG.save      + ' Guardar';
+  document.getElementById('btn-danger').innerHTML      = SVG.trash     + ' Eliminar toda mi cuenta';
+  document.getElementById('cat-modal-close').innerHTML = SVG.x;
+  document.getElementById('cats-alert-icon').innerHTML = SVG.alertTri;
+
+  // Perfil
+  document.getElementById('profile-name').textContent  = user.displayName || 'Usuario';
+  document.getElementById('profile-email').textContent = user.email || '';
+  if (user.photoURL) document.getElementById('profile-avatar').src = user.photoURL;
+
+  // Tema
+  applyInitialTheme();
+
+  // Corte
+  const settings = await getSettings(curUser.uid);
+  const corte = settings.corte || 1;
+  localStorage.setItem('finanz_corte', corte.toString());
+  document.getElementById('select-corte').value = corte.toString();
+  actualizarCorteDesc();
+
+  // Export mes por defecto
+  document.getElementById('export-mes').value = getSelectedMonth();
+
+  // Nueva cat button
+  document.getElementById('btn-new-cat').onclick = () => { resetCatForm(); openModal('modal-cat'); };
+
+  document.getElementById('app-loading').style.display = 'none';
+  document.getElementById('app').style.display         = 'flex';
+
+  await initCategorias(curUser.uid);
+  loadCats();
+});
+</script>
+</body>
+</html>

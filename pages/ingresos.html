@@ -132,25 +132,39 @@ async function loadIngresos() {
   const tbody = document.getElementById('tabla-ingresos');
   tbody.innerHTML = '<tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr>';
   _cache = await getIngresos(curUser.uid, curMonth);
-  const total = _cache.reduce((s,i)=>s+(i.valor||0),0);
+  const total        = _cache.filter(i => i.activo !== false).reduce((s,i)=>s+(i.valor||0),0);
+  const totalTodos   = _cache.reduce((s,i)=>s+(i.valor||0),0);
   document.getElementById('total-mes').textContent    = formatCOP(total);
   document.getElementById('cant-mes').textContent     = _cache.length;
   document.getElementById('total-footer').textContent = formatCOP(total);
 
+  // Advertencia si hay inactivos
+  const inactivos = _cache.filter(i => i.activo === false).length;
+  const hint = document.getElementById('inactive-hint');
+  if (inactivos > 0) {
+    hint.textContent = `${inactivos} ingreso${inactivos>1?'s':''} desactivado${inactivos>1?'s':''} (−${formatCOP(totalTodos - total)})`;
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
+
   if (!_cache.length) {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="empty-state-title">Sin ingresos este mes</div><div class="empty-state-sub">Haz clic en "Nuevo ingreso" para comenzar</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-title">Sin ingresos este mes</div><div class="empty-state-sub">Haz clic en "Nuevo ingreso" para comenzar</div></div></td></tr>';
     return;
   }
-  tbody.innerHTML = _cache.map(i => `
-    <tr>
+  tbody.innerHTML = _cache.map(i => {
+    const activo = i.activo !== false;
+    return `<tr class="${activo?'':'row-inactive'}">
+      <td><button class="toggle-pill ${activo?'on':'off'}" onclick="toggleIngreso('${i.id}')">${activo?'Activo':'Inactivo'}</button></td>
       <td><strong>${i.nombre}</strong>${i.descripcion?'<br><span style="font-size:12px;color:var(--text3)">'+i.descripcion+'</span>':''}</td>
       <td>${formatDate(i.fecha)}</td>
-      <td class="text-right td-amt green">${formatCOP(i.valor)}</td>
+      <td class="text-right td-amt ${activo?'green':''}"><span style="${activo?'':'text-decoration:line-through'}">${formatCOP(i.valor)}</span></td>
       <td style="white-space:nowrap;display:flex;gap:4px">
         <button class="btn btn-ghost btn-icon" onclick="editarIngreso('${i.id}')" title="Editar">${SVG.pencil}</button>
         <button class="btn btn-ghost btn-icon" onclick="borrarIngreso('${i.id}')" title="Eliminar">${SVG.trash}</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function resetForm() {
@@ -187,6 +201,15 @@ async function guardarIngreso() {
     closeModal('modal-ingreso');
     loadIngresos();
   } catch(e) { showToast('Error al guardar','error'); }
+}
+
+async function toggleIngreso(id) {
+  const item = _cache.find(i => i.id === id);
+  if (!item) return;
+  try {
+    await updateIngreso(curUser.uid, curMonth, id, { activo: item.activo === false });
+    loadIngresos();
+  } catch(e) { showToast('Error al actualizar', 'error'); }
 }
 
 async function borrarIngreso(id) {

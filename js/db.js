@@ -11,7 +11,7 @@ async function getIngresos(uid, mes) {
 async function addIngreso(uid, mes, data) {
   return db.collection('users').doc(uid)
     .collection('meses').doc(mes).collection('ingresos')
-    .add({ ...data, creadoEn: firebase.firestore.FieldValue.serverTimestamp() });
+    .add({ activo: true, ...data, creadoEn: firebase.firestore.FieldValue.serverTimestamp() });
 }
 
 async function updateIngreso(uid, mes, id, data) {
@@ -98,7 +98,10 @@ async function getResumenMes(uid, mes) {
   const [ingresos, egresos] = await Promise.all([
     getIngresos(uid, mes), getEgresos(uid, mes)
   ]);
-  const totalIngresos = ingresos.reduce((s, i) => s + (i.valor || 0), 0);
+  // Solo suma ingresos activos (activo === true o sin campo = legacy activo)
+  const totalIngresos = ingresos
+    .filter(i => i.activo !== false)
+    .reduce((s, i) => s + (i.valor || 0), 0);
   const egresosPorCategoria = {};
   // Init with all known categories
   (window._CATS || []).forEach(c => egresosPorCategoria[c.id] = 0);

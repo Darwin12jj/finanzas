@@ -501,3 +501,13 @@ html.dark .summary-card     { background: var(--card); }
   .mobile-nav-item  { font-size: 9px; }
   .mobile-nav-item .icon svg { width: 20px; height: 20px; }
 }
+
+/* ===== TOGGLE PILL (ingresos activo/inactivo) ======================== */
+.toggle-pill {
+  padding: 3px 10px; border-radius: var(--rf); font-size: 11px; font-weight: 700;
+  border: 1.5px solid; transition: all .2s; cursor: pointer; white-space: nowrap; background: none;
+}
+.toggle-pill.on  { background: var(--success-l); color: var(--success); border-color: #86efac; }
+.toggle-pill.off { background: var(--bg);        color: var(--text3);   border-color: var(--border); }
+.row-inactive td           { opacity: .4; }
+.row-inactive td:first-child { opacity: 1 !important; }

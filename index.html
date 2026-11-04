@@ -43,6 +43,14 @@
 
       <!-- Vista: mes específico -->
       <div id="section-month">
+        <!-- Banner: mes actual sin datos -->
+        <div id="empty-month-banner" class="alert alert-warning mb-4" style="display:none;align-items:center;gap:12px">
+          <span id="empty-month-icon"></span>
+          <div style="flex:1">Este mes no tiene datos. ¿Copiar ingresos y gastos de <strong id="prev-month-name">—</strong>?</div>
+          <button class="btn btn-sm btn-outline" id="btn-copy-month" onclick="copiarMesAnterior()">Copiar todo</button>
+          <button class="btn btn-sm btn-ghost" onclick="document.getElementById('empty-month-banner').style.display='none'">Ahora no</button>
+        </div>
+
         <div class="summary-grid mb-6">
           <div class="summary-card income">
             <div class="summary-label">Total Ingresos</div>
@@ -154,6 +162,15 @@ async function loadMonthView(mes) {
       getPresupuestos(curUser.uid),
       getMetas(curUser.uid)
     ]);
+
+    // Mostrar banner solo si el mes actual está vacío
+    const banner  = document.getElementById('empty-month-banner');
+    const isEmpty = resumen.ingresos.length === 0 && resumen.egresos.length === 0;
+    banner.style.display = (isEmpty && mes === getCurrentMonth()) ? 'flex' : 'none';
+    if (isEmpty && mes === getCurrentMonth()) {
+      document.getElementById('prev-month-name').textContent = formatMonth(prevMonth(mes));
+    }
+
     const totalMetas = metas.reduce((s,m) => s + (m.actual||0), 0);
     renderCards(resumen, totalMetas);
     renderExpenseChart(resumen.egresosPorCategoria);
@@ -165,6 +182,22 @@ async function loadMonthView(mes) {
 async function loadHistoryView() {
   await renderHistoryChart();
   await renderHistoryTable();
+}
+
+async function copiarMesAnterior() {
+  const btn = document.getElementById('btn-copy-month');
+  btn.disabled = true; btn.textContent = 'Copiando...';
+  const mes = getCurrentMonth();
+  try {
+    const [ni, ne] = await Promise.all([
+      copiarDesdeAnterior(curUser.uid, mes, 'ingresos'),
+      copiarDesdeAnterior(curUser.uid, mes, 'egresos')
+    ]);
+    document.getElementById('empty-month-banner').style.display = 'none';
+    showToast(`Copiados ${ni} ingreso${ni!==1?'s':''} y ${ne} gasto${ne!==1?'s':''} de ${formatMonth(prevMonth(mes))}`);
+    await loadMonthView(mes);
+  } catch(e) { showToast('Error al copiar', 'error'); }
+  btn.disabled = false; btn.textContent = 'Copiar todo';
 }
 
 function renderCards(r, totalMetas) {
@@ -289,6 +322,7 @@ requireAuth(async user => {
   document.getElementById('icon-egresos').innerHTML   = SVG.creditCard;
   document.getElementById('icon-saldo').innerHTML     = SVG.dollar;
   document.getElementById('alert-icon').innerHTML     = SVG.alertTri;
+  document.getElementById('empty-month-icon').innerHTML = SVG.alertTri;
   document.getElementById('ver-presup').innerHTML     = 'Ver todo ' + SVG.arrowRight;
   document.getElementById('ver-hist').innerHTML       = 'Ver histórico ' + SVG.arrowRight;
   document.querySelector('.page-title').innerHTML     = SVG.home + ' Dashboard';

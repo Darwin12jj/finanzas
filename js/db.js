@@ -323,3 +323,20 @@ async function copiarDesdeAnterior(uid, mes, tipo) {
   }
   return items.length;
 }
+
+// ── Limpiar mes y re-copiar desde el anterior ─────────────────────────────
+async function limpiarYCopiarMes(uid, mes) {
+  const [ings, egs] = await Promise.all([
+    getIngresos(uid, mes),
+    getEgresos(uid, mes)
+  ]);
+  await Promise.all([
+    ...ings.map(i => deleteIngreso(uid, mes, i.id)),
+    ...egs.map(e => deleteEgreso(uid, mes, e.id))
+  ]);
+  const [ni, ne] = await Promise.all([
+    copiarDesdeAnterior(uid, mes, 'ingresos'),
+    copiarDesdeAnterior(uid, mes, 'egresos')
+  ]);
+  return { ni, ne };
+}

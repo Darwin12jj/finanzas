@@ -129,6 +129,22 @@
         </div>
       </div>
 
+      <!-- ── Re-copiar mes ─────────────────────────────────────────────── -->
+      <div class="settings-section">
+        <h2 id="h-recopy"></h2>
+        <p>Borra los datos del mes seleccionado y los reemplaza con los del mes anterior. Útil si actualizaste un mes y quieres sincronizar el siguiente.</p>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Mes a reemplazar</div>
+            <div class="settings-sub" id="recopy-desc">Selecciona el mes</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input class="form-input" type="month" id="recopy-mes" style="width:160px" oninput="actualizarRecopyDesc()">
+            <button class="btn btn-outline" onclick="doRecopiar()" id="btn-recopy"></button>
+          </div>
+        </div>
+      </div>
+
       <!-- ── Zona de peligro ────────────────────────────────────────── -->
       <div class="settings-section danger-zone">
         <h2 id="h-danger"></h2>
@@ -325,6 +341,28 @@ async function borrarCat(id) {
   } catch(e) { showToast('Error al eliminar', 'error'); }
 }
 
+// ── Re-copiar mes ────────────────────────────────────────────────────────
+function actualizarRecopyDesc() {
+  const mes = document.getElementById('recopy-mes').value;
+  document.getElementById('recopy-desc').textContent = mes
+    ? `Se reemplazará con datos de ${formatMonth(prevMonth(mes))}`
+    : 'Selecciona el mes';
+}
+
+async function doRecopiar() {
+  const mes = document.getElementById('recopy-mes').value;
+  if (!mes) { showToast('Selecciona un mes', 'warning'); return; }
+  if (!confirm(`¿Borrar todos los datos de ${formatMonth(mes)} y reemplazarlos con los de ${formatMonth(prevMonth(mes))}?`)) return;
+  const btn = document.getElementById('btn-recopy');
+  btn.disabled = true; btn.textContent = 'Procesando...';
+  try {
+    const { ni, ne } = await limpiarYCopiarMes(curUser.uid, mes);
+    showToast(`Listo: ${ni} ingreso${ni!==1?'s':''} y ${ne} gasto${ne!==1?'s':''} copiados`);
+  } catch(e) { showToast('Error al re-copiar', 'error'); }
+  btn.disabled = false;
+  btn.innerHTML = SVG.arrowRight + ' Re-copiar';
+}
+
 // ── Eliminar cuenta ───────────────────────────────────────────────────────
 function mostrarDeleteForm() {
   document.getElementById('delete-trigger').style.display = 'none';
@@ -368,6 +406,8 @@ requireAuth(async user => {
   document.getElementById('h-corte').innerHTML         = SVG.calendar  + ' Día de corte';
   document.getElementById('h-export').innerHTML        = SVG.fileText  + ' Exportar PDF';
   document.getElementById('h-cats').innerHTML          = SVG.settings  + ' Categorías';
+  document.getElementById('h-recopy').innerHTML        = SVG.arrowRight + ' Re-copiar mes';
+  document.getElementById('btn-recopy').innerHTML      = SVG.arrowRight + ' Re-copiar';
   document.getElementById('h-danger').innerHTML        = SVG.trash     + ' Zona de peligro';
   document.getElementById('btn-corte').innerHTML       = SVG.save      + ' Guardar';
   document.getElementById('btn-export').innerHTML      = SVG.fileText  + ' Exportar PDF';
@@ -394,6 +434,10 @@ requireAuth(async user => {
 
   // Export mes por defecto
   document.getElementById('export-mes').value = getSelectedMonth();
+
+  // Re-copiar: mes por defecto = mes actual
+  document.getElementById('recopy-mes').value = getCurrentMonth();
+  actualizarRecopyDesc();
 
   // Nueva cat button
   document.getElementById('btn-new-cat').onclick = () => { resetCatForm(); openModal('modal-cat'); };

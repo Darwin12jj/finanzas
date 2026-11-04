@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'finanzapp-v1';
+const CACHE = 'finanzapp-v2';
 
 const ASSETS = [
   './',

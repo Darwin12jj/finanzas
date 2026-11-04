@@ -144,8 +144,18 @@ function changeMonth(dir) {
 
 async function loadIngresos() {
   const tbody = document.getElementById('tabla-ingresos');
-  tbody.innerHTML = '<tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>';
   _cache = await getIngresos(curUser.uid, curMonth);
+
+  // Al primer acceso al mes actual sin datos, copia del mes anterior
+  if (_cache.length === 0 && curMonth === getCurrentMonth()) {
+    const n = await copiarDesdeAnterior(curUser.uid, curMonth, 'ingresos');
+    if (n > 0) {
+      _cache = await getIngresos(curUser.uid, curMonth);
+      showToast(`${n} ingreso${n !== 1 ? 's' : ''} copiado${n !== 1 ? 's' : ''} del mes anterior`);
+    }
+  }
+
   const total        = _cache.filter(i => i.activo !== false).reduce((s,i)=>s+(i.valor||0),0);
   const totalTodos   = _cache.reduce((s,i)=>s+(i.valor||0),0);
   document.getElementById('total-mes').textContent    = formatCOP(total);

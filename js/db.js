@@ -307,3 +307,19 @@ async function exportarPDF(uid, mes) {
 function fmtPDF(v) {
   return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(v||0);
 }
+
+// ── Copiar datos del mes anterior ─────────────────────────────────────────
+async function copiarDesdeAnterior(uid, mes, tipo) {
+  const mesAnt = prevMonth(mes);
+  const items  = tipo === 'ingresos'
+    ? await getIngresos(uid, mesAnt)
+    : await getEgresos(uid, mesAnt);
+  if (!items.length) return 0;
+  const dia1 = mes + '-01';
+  for (const item of items) {
+    const { id, creadoEn, ...rest } = item;
+    if (tipo === 'ingresos') await addIngreso(uid, mes, { ...rest, fecha: dia1 });
+    else                     await addEgreso (uid, mes, { ...rest, fecha: dia1 });
+  }
+  return items.length;
+}

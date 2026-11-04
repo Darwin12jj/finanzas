@@ -38,6 +38,14 @@
     </div>
 
     <div class="page-body">
+      <!-- Banner: copiar egresos del mes anterior -->
+      <div id="copy-banner" class="alert alert-warning mb-4" style="display:none;align-items:center;gap:12px">
+        <span id="copy-banner-icon"></span>
+        <div style="flex:1">Sin gastos este mes. ¿Copiar los del mes anterior como punto de partida?</div>
+        <button class="btn btn-sm btn-outline" id="copy-btn" onclick="copiarEgresos()">Copiar</button>
+        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('copy-banner').style.display='none'">No</button>
+      </div>
+
       <div id="cat-cards" class="mb-6" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
       <div class="tabs" id="tabs"></div>
       <div class="table-wrap">
@@ -142,7 +150,28 @@ function switchTab(key) { activeTab=key; renderTabs(); renderTable(); }
 
 async function loadEgresos() {
   _all = await getEgresos(curUser.uid, curMonth);
+  const banner = document.getElementById('copy-banner');
+  if (banner) {
+    banner.style.display = (_all.length === 0 && curMonth === getCurrentMonth()) ? 'flex' : 'none';
+  }
   renderCatCards(); renderTabs(); renderTable();
+}
+
+async function copiarEgresos() {
+  const btn = document.getElementById('copy-btn');
+  btn.disabled = true; btn.textContent = 'Copiando...';
+  try {
+    const n = await copiarDesdeAnterior(curUser.uid, curMonth, 'egresos');
+    if (n > 0) {
+      showToast(`${n} gasto${n !== 1 ? 's' : ''} copiado${n !== 1 ? 's' : ''} del mes anterior`);
+      document.getElementById('copy-banner').style.display = 'none';
+      await loadEgresos();
+    } else {
+      showToast('No hay gastos en el mes anterior', 'warning');
+      document.getElementById('copy-banner').style.display = 'none';
+    }
+  } catch(e) { showToast('Error al copiar', 'error'); }
+  btn.disabled = false;
 }
 
 function renderCatCards() {
@@ -231,6 +260,7 @@ requireAuth(async user => {
   document.getElementById('btn-guardar').innerHTML      = SVG.save + ' Guardar';
   document.getElementById('modal-close-btn').innerHTML  = SVG.x;
   document.getElementById('page-title-el').innerHTML    = SVG.creditCard + ' Egresos';
+  document.getElementById('copy-banner-icon').innerHTML = SVG.alertTri;
   document.getElementById('app-loading').style.display  = 'none';
   document.getElementById('app').style.display          = 'flex';
   await initCategorias(curUser.uid);

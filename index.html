@@ -202,14 +202,19 @@ function renderCards(r, totalMetas) {
 }
 
 function renderExpenseChart(bycat) {
-  const wrap   = document.getElementById('expense-chart-wrap');
-  const canvas = document.getElementById('expense-chart');
-  const cats   = getActiveCats();
-  const data   = cats.map(c => bycat[c.id]||0);
+  const wrap = document.getElementById('expense-chart-wrap');
+  const cats  = getActiveCats();
+  const data  = cats.map(c => bycat[c.id]||0);
   if (!data.some(v=>v>0)) {
+    if (chartExp) { chartExp.destroy(); chartExp = null; }
     wrap.innerHTML = '<div class="empty-state"><div class="empty-state-title">Sin gastos este mes</div></div>';
     return;
   }
+  // Restaurar el canvas si fue reemplazado por el empty-state
+  if (!document.getElementById('expense-chart')) {
+    wrap.innerHTML = '<canvas id="expense-chart"></canvas>';
+  }
+  const canvas = document.getElementById('expense-chart');
   if (chartExp) chartExp.destroy();
   chartExp = new Chart(canvas.getContext('2d'), {
     type:'doughnut',
@@ -259,6 +264,21 @@ async function renderHistoryChart() {
         tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+formatCOP(ctx.parsed.y)}} },
       scales:{y:{beginAtZero:true, ticks:{callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+v}}} }
   });
+}
+
+async function renderHistoryTable() {
+  const months = getLast6Months(getCurrentMonth());
+  const data   = await Promise.all(months.map(m => getResumenMes(curUser.uid, m)));
+  document.getElementById('tabla-hist').innerHTML = [...months].reverse().map((m, i) => {
+    const d   = data[months.length - 1 - i];
+    const cls = d.saldoLibre >= 0 ? 'green' : 'red';
+    return `<tr>
+      <td style="font-weight:600">${formatMonth(m)}</td>
+      <td class="text-right td-amt green">${formatCOP(d.totalIngresos)}</td>
+      <td class="text-right td-amt red">${formatCOP(d.totalEgresos)}</td>
+      <td class="text-right td-amt ${cls}">${formatCOP(d.saldoLibre)}</td>
+    </tr>`;
+  }).join('');
 }
 
 requireAuth(async user => {
